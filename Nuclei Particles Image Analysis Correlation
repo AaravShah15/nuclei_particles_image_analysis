@@ -1,0 +1,68 @@
+from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
+import skimage
+import skimage.io
+import skimage.filters
+from skimage.color import label2rgb
+from scipy import ndimage as ndi
+from skimage.segmentation import watershed
+from skimage.feature import peak_local_max
+import tkinter as tk
+from tkinter import filedialog
+import pandas as pd
+import seaborn as sns
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+# Importing the respective libraries and packages for the code below.
+
+root = tk.Tk()
+root.withdraw()
+print("Select your nuclei image.")
+nuclei_image_1 = np.asarray(Image.open(filedialog.askopenfilename()))
+# Prompting the user to select an image of nuclei from their desktop.
+print("Select your particles image.")
+particles_image_1 = np.asarray(Image.open(filedialog.askopenfilename()))
+# Prompting the user to select an image of particles from their desktop.
+nuclei_image_2 = nuclei_image_1[:,:,2]
+# Takes the numpy array of the nuclei image above and only focuses on the Blue in RGB.
+nuclei_image_3 = skimage.filters.gaussian(nuclei_image_2, sigma = 5)
+# Applies the Gaussian Blur to nuclei_image_2.
+nuclei_threshold = skimage.filters.threshold_otsu(nuclei_image_3)
+# On top of the Gaussian Blur, subsequently applies Otsu Thresholding.
+nuclei_mask = nuclei_image_3 > nuclei_threshold
+# Considering array values greater than the calculated nuclei threshold.
+distance = ndi.distance_transform_edt(nuclei_mask)
+# Initial step of Watershed Segmentation.
+coords = peak_local_max(distance, footprint=np.ones((3,3)), labels = nuclei_mask, min_distance = 15)
+# peak_local_max function implemented, limiting threshold to only array values within minimum distance of 15 units.
+mask = np.zeros(distance.shape, dtype=bool)
+mask[tuple(coords.T)] = True
+markers, _ = ndi.label(mask)
+# Three steps above are the continuation of Watershed Segmentation.
+labels = watershed(-distance, markers, mask=nuclei_mask)
+# Labels represent different nuclei in the array after multiple rounds of thresholding.
+blank_list = [0] * labels.max()
+# Creates a blank list and adds the total number of nuclei identified in the nuclei image to the blank list.
+for i in range(len(particles_image_1)):
+# Identifies the "i" coordinate in the particles array.
+  for j in range(len(particles_image_1)):
+# Identifies the "j" coordinate in the particles array.
+    if labels[i][j] > 0:
+# Selects only the coordinates (i,j) in the nuclei image that have a nuclei. 
+      blank_list[labels[i][j]-1] += particles_image_1[i][j][0]
+# Adds the number of particles at the corresponding (i,j) coordinate selected from the nuclei image to the blank list.
+print(blank_list)
+# Prints blank list with number of particles corresponding to specific nuclei.
+plt.style.use('_mpl-gallery')
+fig, ax = plt.subplots()
+ax.hist(blank_list, bins=10, linewidth=0.5, edgecolor="white")
+# Lines 61-63 creating histogram with 10 bins, using data from the blank list.
+ax.set_xlabel('Number of Particles at Given Nuclei Coordinate [i][j]')
+ax.set_ylabel('Number of Nuclei With Given Range of Particles at Nuclei Coordinate [i][j]')
+ax.set_title('Nuclei and Particle Correlation')
+ax.set(xlim=(0, max(blank_list)), xticks=np.arange(1, max(blank_list)),
+       ylim=(0,100), yticks=np.linspace(0,100,10))
+# Lines 65- 69 labeling axes, title, and creating spacing marks.
+plt.show()
+# Displaying histogram.
